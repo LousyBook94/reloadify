@@ -2,6 +2,8 @@ import asyncio
 import http.server
 import socketserver
 import webbrowser
+import re
+import urllib.parse
 from pathlib import Path
 import click
 import rich
@@ -61,16 +63,20 @@ class InjectedScriptHttpRequestHandler(http.server.SimpleHTTPRequestHandler):
         super().end_headers()
 
     def render_and_send_html(self, path):
+        # The path from do_GET is URL-encoded, so decode it
+        decoded_path = urllib.parse.unquote(path)
+
+        # Normalize and secure the path
+        base_dir = Path(self.directory).resolve()
+        # The requested path is relative to the base_dir
+        requested_path = (base_dir / decoded_path).resolve()
+
+        # Prevent directory traversal attacks
+        if not requested_path.is_relative_to(base_dir):
+            self.send_error(403, "Forbidden")
+            return
+
         try:
-            # Normalize and secure the path
-            base_dir = Path(self.directory).resolve()
-            requested_path = (base_dir / path).resolve()
-            
-            # Prevent directory traversal attacks
-            if not requested_path.is_relative_to(base_dir):
-                self.send_error(403, "Forbidden")
-                return
-                
             with open(requested_path, "r", encoding="utf-8") as f:
                 content = f.read()
             
@@ -87,21 +93,34 @@ class InjectedScriptHttpRequestHandler(http.server.SimpleHTTPRequestHandler):
                     })();
                 </script>
             '''
-            content = content.replace("</body>", f"{reload_script}</body>")
+            # Use a case-insensitive regex for the body tag
+            body_end_tag = re.search(r'</body\s*>', content, re.IGNORECASE)
+            if body_end_tag:
+                content = content[:body_end_tag.start()] + reload_script + content[body_end_tag.start():]
+
             self.send_response(200)
-            self.send_header("Content-type", "text/html")
-            self.send_header("Content-Length", str(len(content)))
+            self.send_header("Content-type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(content.encode('utf-8'))))
             self.end_headers()
             self.wfile.write(content.encode("utf-8"))
         except FileNotFoundError:
-            self.send_error(404, "File not found")
+            # If the specific file is not found, let the default handler try to serve it
+            # (e.g., it might be a directory, and the default handler will look for index.html)
+            super().do_GET()
+        except Exception as e:
+            self.send_error(500, f"Internal Server Error: {e}")
 
     def do_GET(self):
-        if self.path == '/':
-            self.path = 'index.html'
-        if self.path.endswith(".html"):
-            self.render_and_send_html(self.path.lstrip("/"))
+        # Serve index.html by default
+        path = self.path.lstrip('/')
+        if path == '' or path.endswith('/'):
+            path += 'index.html'
+
+        # If it's an HTML file, inject the script
+        if path.endswith(".html"):
+            self.render_and_send_html(path)
         else:
+            # For other file types (CSS, JS, images), serve them directly
             super().do_GET()
 
 # --- Main Application Logic ---
@@ -114,7 +133,7 @@ def find_available_port(start_port, max_ports):
             continue
     return None
 
-async def main_async(file, watch_dir, custom_port, no_open):
+async def main_async(file, watch_dir, custom_port, no_open, timeout):
     # Determine watch directory
     if watch_dir:
         watch_path = Path(watch_dir)
@@ -162,9 +181,18 @@ async def main_async(file, watch_dir, custom_port, no_open):
     # Start WebSocket server
     async with websockets.serve(websocket_server, "localhost", 5678):
         if not no_open:
-            webbrowser.open(f"http://localhost:{port}/{Path(file).name}")
+            # Make the file path relative to the watch path for the URL
+            url_path = Path(file).relative_to(watch_path).as_posix()
+            webbrowser.open(f"http://localhost:{port}/{url_path}")
+
+        # Main loop with timeout
         try:
-            await http_server_future
+            if timeout:
+                await asyncio.wait_for(http_server_future, timeout=timeout)
+            else:
+                await http_server_future
+        except asyncio.TimeoutError:
+            console.print(f"\n[bold yellow]Timeout of {timeout} seconds reached. Shutting down.[/]")
         except KeyboardInterrupt:
             pass  # Allow graceful shutdown
         finally:
@@ -179,10 +207,11 @@ async def main_async(file, watch_dir, custom_port, no_open):
 @click.option("-d", "--directory", "watch_dir", type=click.Path(exists=True, file_okay=False, resolve_path=True), help="Custom directory to watch.")
 @click.option("-p", "--port", "custom_port", type=int, help="Custom port to serve on.")
 @click.option("--no-open", "no_open", is_flag=True, help="Do not open the browser automatically.")
-def main(file, watch_dir, custom_port, no_open):
+@click.option("-t", "--timeout", "timeout", type=int, help="Automatically shut down the server after a specified number of seconds.")
+def main(file, watch_dir, custom_port, no_open, timeout):
     """A blazing-fast, ultra-lightweight Python CLI tool for live-reloading web content."""
     try:
-        asyncio.run(main_async(file, watch_dir, custom_port, no_open))
+        asyncio.run(main_async(file, watch_dir, custom_port, no_open, timeout))
     except KeyboardInterrupt:
         console.print("\n[bold red]Server stopped.[/]")
 
