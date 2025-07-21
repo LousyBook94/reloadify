@@ -47,6 +47,14 @@ You can customize `reloadify` to fit your needs:
     reloadify -p 8000
     ```
 
+-   `-t, --timeout <SECONDS>`: Automatically shut down the server after a specified number of seconds.
+
+    *Example:*
+    ```bash
+    # Shut down after 60 seconds
+    reloadify -t 60
+    ```
+
 ### ✨ Examples
 
 Here are a few ways you can use `reloadify`:
