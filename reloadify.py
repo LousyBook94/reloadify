@@ -12,6 +12,9 @@ from rich.panel import Panel
 import watchdog.events
 import watchdog.observers
 import websockets
+from prompt_toolkit import prompt
+from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.validation import Validator, ValidationError
 
 # --- Configuration ---
 DEFAULT_PORT = 4005
@@ -202,14 +205,55 @@ async def main_async(file, watch_dir, custom_port, no_open, timeout):
             console.print("\n[bold red]Server stopped.[/]")
 
 
+def select_html_file():
+    """Finds HTML files and prompts the user to select one if multiple are found."""
+    html_files = list(Path.cwd().rglob("*.html"))
+
+    if not html_files:
+        console.print("[bold red]No HTML files found in the current directory.[/]")
+        return None
+
+    if len(html_files) == 1:
+        return str(html_files[0].resolve())
+
+    console.print("[bold green]Multiple HTML files found. Please select one:[/]")
+
+    file_paths = {str(f.relative_to(Path.cwd())): f for f in html_files}
+
+    class FilePathValidator(Validator):
+        def validate(self, document):
+            text = document.text
+            if text not in file_paths:
+                raise ValidationError(message="Please select a valid file from the list.", cursor_position=len(text))
+
+    completer = WordCompleter(list(file_paths.keys()), ignore_case=True)
+
+    try:
+        selected_file_path_str = prompt(
+            "Select an HTML file: ",
+            completer=completer,
+            validator=FilePathValidator(),
+            refresh_interval=3,
+        )
+        selected_path = file_paths[selected_file_path_str]
+        return str(selected_path.resolve())
+    except (KeyboardInterrupt, EOFError):
+        return None
+
+
 @click.command()
-@click.argument("file", default="index.html", type=click.Path(exists=True, dir_okay=False, resolve_path=True))
+@click.argument("file", default=None, required=False, type=click.Path(exists=True, dir_okay=False, resolve_path=True))
 @click.option("-d", "--directory", "watch_dir", type=click.Path(exists=True, file_okay=False, resolve_path=True), help="Custom directory to watch.")
 @click.option("-p", "--port", "custom_port", type=int, help="Custom port to serve on.")
 @click.option("--no-open", "no_open", is_flag=True, help="Do not open the browser automatically.")
 @click.option("-t", "--timeout", "timeout", type=int, help="Automatically shut down the server after a specified number of seconds.")
 def main(file, watch_dir, custom_port, no_open, timeout):
     """A blazing-fast, ultra-lightweight Python CLI tool for live-reloading web content."""
+    if file is None:
+        file = select_html_file()
+        if file is None:
+            return
+
     try:
         asyncio.run(main_async(file, watch_dir, custom_port, no_open, timeout))
     except KeyboardInterrupt:

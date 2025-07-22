@@ -2,3 +2,5 @@ click
 rich
 watchdog
 websockets
+prompt_toolkit
+pytest
