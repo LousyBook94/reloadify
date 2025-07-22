@@ -26,10 +26,13 @@ def test_select_html_file_single_file(tmp_path):
     with patch('pathlib.Path.cwd', return_value=tmp_path):
         assert select_html_file() == str((tmp_path / "index.html").resolve())
 
-@patch('reloadify.prompt')
-def test_select_html_file_multiple_files(mock_prompt, tmp_path, create_html_files):
-    mock_prompt.return_value = "index.html"
+@patch('reloadify.radiolist_dialog')
+def test_select_html_file_multiple_files(mock_radiolist_dialog, tmp_path, create_html_files):
+    mock_dialog_instance = MagicMock()
+    mock_dialog_instance.run.return_value = str((tmp_path / "index.html").resolve())
+    mock_radiolist_dialog.return_value = mock_dialog_instance
+
     with patch('pathlib.Path.cwd', return_value=tmp_path):
         result = select_html_file()
         assert result == str((tmp_path / "index.html").resolve())
-    mock_prompt.assert_called_once()
+    mock_radiolist_dialog.assert_called_once()
