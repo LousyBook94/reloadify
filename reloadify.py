@@ -13,6 +13,7 @@ import watchdog.events
 import watchdog.observers
 import websockets
 from prompt_toolkit.shortcuts import radiolist_dialog
+from prompt_toolkit.styles import Style
 
 # --- Configuration ---
 DEFAULT_PORT = 4005
@@ -217,10 +218,23 @@ def select_html_file():
     file_paths = sorted([(str(f.relative_to(Path.cwd())), str(f.resolve())) for f in html_files])
 
     try:
+        # Custom style for the dialog - soft, pleasing colors
+        dialog_style = Style.from_dict({
+            'dialog': 'bg:#2d3748',  # Soft dark blue-gray
+            'dialog.body': 'bg:#2d3748 fg:#e2e8f0',  # Light gray text
+            'dialog frame.label': 'bg:#4a5568 fg:#f7fafc bold',  # Title styling
+            'radio-list': 'bg:#2d3748',
+            'radio-checked': 'bg:#48bb78 fg:#1a202c',  # Soft green for selected
+            'radio-selected': 'bg:#4a5568 fg:#f7fafc',  # Lighter gray for focused
+            'button': 'bg:#4a5568 fg:#f7fafc',
+            'button.focused': 'bg:#48bb78 fg:#1a202c',
+        })
+        
         selected_file = radiolist_dialog(
-            title="Multiple HTML files found",
-            text="Please select one:",
-            values=file_paths
+            title="🎯 Multiple HTML files found",
+            text="Use ↑↓ arrows to navigate, SPACE to select, TAB to OK button, ENTER to confirm\n💡 You can also click with your mouse!",
+            values=file_paths,
+            style=dialog_style
         ).run()
         return selected_file
     except (KeyboardInterrupt, EOFError):
