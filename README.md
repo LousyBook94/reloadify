@@ -25,7 +25,7 @@ Once installed, navigate to your project's folder and let the magic happen!
 reloadify [FILE]
 ```
 
--   `[FILE]` (optional): This is your main HTML file. If you don't specify one, `reloadify` will look for `index.html` in your current folder. It will automagically watch for changes in the same directory.
+-   `[FILE]` (optional): This is your main HTML file. If you don't specify one, `reloadify` will search the current directory and all subdirectories for `.html` files. If multiple `.html` files are found, it will prompt you to select one. If only one is found, it will be served automatically.
 
 ### ⚙️ Options
 
@@ -85,6 +85,28 @@ Here are a few ways you can use `reloadify`:
 -   **GitHub:** [LousyBook94](https://github.com/LousyBook94/) 🐙
 -   **YouTube:** [@LousyBook01](http://youtube.com/@LousyBook01) 📺
 
+
+## 🤝 Contributing
+
+Contributions are welcome! If you'd like to help improve reloadify, please follow these steps:
+
+1.  **Fork the repository.**
+2.  **Create a new branch.**
+3.  **Set up a virtual environment:**
+    ```bash
+    python -m venv venv
+    source venv/bin/activate
+    ```
+4.  **Install the dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+5.  **Make your changes.**
+6.  **Run the tests:**
+    ```bash
+    pytest
+    ```
+7.  **Submit a pull request.**
 
 ## 📝 License
 

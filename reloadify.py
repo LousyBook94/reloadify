@@ -12,6 +12,7 @@ from rich.panel import Panel
 import watchdog.events
 import watchdog.observers
 import websockets
+from prompt_toolkit.shortcuts import radiolist_dialog
 
 # --- Configuration ---
 DEFAULT_PORT = 4005
@@ -202,14 +203,43 @@ async def main_async(file, watch_dir, custom_port, no_open, timeout):
             console.print("\n[bold red]Server stopped.[/]")
 
 
+def select_html_file():
+    """Finds HTML files and prompts the user to select one if multiple are found."""
+    html_files = list(Path.cwd().rglob("*.html"))
+
+    if not html_files:
+        console.print("[bold red]No HTML files found in the current directory.[/]")
+        return None
+
+    if len(html_files) == 1:
+        return str(html_files[0].resolve())
+
+    file_paths = sorted([(str(f.relative_to(Path.cwd())), str(f.resolve())) for f in html_files])
+
+    try:
+        selected_file = radiolist_dialog(
+            title="Multiple HTML files found",
+            text="Please select one:",
+            values=file_paths
+        ).run()
+        return selected_file
+    except (KeyboardInterrupt, EOFError):
+        return None
+
+
 @click.command()
-@click.argument("file", default="index.html", type=click.Path(exists=True, dir_okay=False, resolve_path=True))
+@click.argument("file", default=None, required=False, type=click.Path(exists=True, dir_okay=False, resolve_path=True))
 @click.option("-d", "--directory", "watch_dir", type=click.Path(exists=True, file_okay=False, resolve_path=True), help="Custom directory to watch.")
 @click.option("-p", "--port", "custom_port", type=int, help="Custom port to serve on.")
 @click.option("--no-open", "no_open", is_flag=True, help="Do not open the browser automatically.")
 @click.option("-t", "--timeout", "timeout", type=int, help="Automatically shut down the server after a specified number of seconds.")
 def main(file, watch_dir, custom_port, no_open, timeout):
     """A blazing-fast, ultra-lightweight Python CLI tool for live-reloading web content."""
+    if file is None:
+        file = select_html_file()
+        if file is None:
+            return
+
     try:
         asyncio.run(main_async(file, watch_dir, custom_port, no_open, timeout))
     except KeyboardInterrupt:
