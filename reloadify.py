@@ -12,9 +12,7 @@ from rich.panel import Panel
 import watchdog.events
 import watchdog.observers
 import websockets
-from prompt_toolkit import prompt
-from prompt_toolkit.completion import WordCompleter
-from prompt_toolkit.validation import Validator, ValidationError
+from prompt_toolkit.shortcuts import radiolist_dialog
 
 # --- Configuration ---
 DEFAULT_PORT = 4005
@@ -216,27 +214,15 @@ def select_html_file():
     if len(html_files) == 1:
         return str(html_files[0].resolve())
 
-    console.print("[bold green]Multiple HTML files found. Please select one:[/]")
-
-    file_paths = {str(f.relative_to(Path.cwd())): f for f in html_files}
-
-    class FilePathValidator(Validator):
-        def validate(self, document):
-            text = document.text
-            if text not in file_paths:
-                raise ValidationError(message="Please select a valid file from the list.", cursor_position=len(text))
-
-    completer = WordCompleter(list(file_paths.keys()), ignore_case=True)
+    file_paths = sorted([(str(f.relative_to(Path.cwd())), str(f.resolve())) for f in html_files])
 
     try:
-        selected_file_path_str = prompt(
-            "Select an HTML file: ",
-            completer=completer,
-            validator=FilePathValidator(),
-            refresh_interval=3,
-        )
-        selected_path = file_paths[selected_file_path_str]
-        return str(selected_path.resolve())
+        selected_file = radiolist_dialog(
+            title="Multiple HTML files found",
+            text="Please select one:",
+            values=file_paths
+        ).run()
+        return selected_file
     except (KeyboardInterrupt, EOFError):
         return None
 
